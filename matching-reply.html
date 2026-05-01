@@ -1,0 +1,732 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>返信文ジェネレーター</title>
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+:root {
+  --bg: #f5f5f0;
+  --card: #ffffff;
+  --border: #e0e0da;
+  --text: #1a1a1a;
+  --sub: #888;
+  --accent: #1a1a1a;
+  --danger: #c0392b;
+  --danger-bg: #fff5f5;
+  --danger-border: #fca5a5;
+  --radius: 10px;
+}
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Hiragino Sans', 'Hiragino Kaku Gothic ProN', sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  min-height: 100vh;
+  font-size: 15px;
+}
+.screen { display: none; padding: 0 0 80px; }
+.screen.active { display: block; }
+
+/* HEADER */
+.header {
+  position: sticky; top: 0; z-index: 10;
+  background: var(--bg);
+  padding: 16px 16px 12px;
+  display: flex; align-items: center; gap: 10px;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 16px;
+}
+.header h1 { font-size: 16px; font-weight: 600; flex: 1; }
+.back-btn {
+  background: none; border: none; cursor: pointer;
+  font-size: 24px; color: var(--text); line-height: 1;
+  padding: 0 8px 0 0;
+}
+
+/* API KEY */
+.api-bar {
+  margin: 0 16px 16px;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 12px 14px;
+}
+.api-bar .lbl { font-size: 11px; color: var(--sub); letter-spacing: 0.06em; display: block; margin-bottom: 6px; }
+.api-bar input {
+  width: 100%; padding: 8px 10px;
+  border: 1px solid var(--border); border-radius: 8px;
+  font-size: 13px; font-family: 'SF Mono', 'Courier New', monospace;
+  background: #f9f9f7; color: var(--text);
+}
+.api-bar input:focus { outline: none; border-color: #aaa; }
+
+/* THREAD LIST */
+.thread-list { padding: 0 16px; }
+.thread-item {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 14px 16px;
+  margin-bottom: 10px;
+  cursor: pointer;
+  display: flex; align-items: center; justify-content: space-between;
+  -webkit-tap-highlight-color: transparent;
+}
+.thread-item:active { background: #f0f0eb; }
+.thread-name { font-size: 15px; font-weight: 500; }
+.thread-meta { font-size: 12px; color: var(--sub); margin-top: 3px; }
+.thread-del {
+  background: none; border: none; cursor: pointer;
+  color: #ccc; font-size: 18px; padding: 4px 0 4px 14px;
+}
+.empty-state { text-align: center; color: var(--sub); font-size: 14px; padding: 60px 16px; }
+
+/* FAB */
+.fab {
+  position: fixed; bottom: 28px; right: 20px; z-index: 20;
+  width: 54px; height: 54px; border-radius: 50%;
+  background: var(--accent); color: #fff;
+  border: none; font-size: 28px; cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.2);
+}
+
+/* FORM */
+.fsec { padding: 0 16px; margin-bottom: 16px; }
+.flbl { font-size: 12px; color: var(--sub); letter-spacing: 0.04em; display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px; cursor: pointer; }
+textarea, .finput {
+  width: 100%; padding: 11px 13px;
+  border: 1px solid var(--border); border-radius: var(--radius);
+  font-size: 15px; font-family: inherit;
+  background: var(--card); color: var(--text);
+  line-height: 1.6; resize: vertical;
+}
+textarea:focus, .finput:focus { outline: none; border-color: #aaa; }
+
+/* HISTORY */
+.history-box {
+  margin: 0 16px 16px;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+.history-header {
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--border);
+  font-size: 12px; color: var(--sub); letter-spacing: 0.04em;
+  display: flex; align-items: center; justify-content: space-between;
+}
+.history-clear { background: none; border: none; cursor: pointer; font-size: 12px; color: var(--danger); }
+.history-messages { padding: 12px 14px; max-height: 320px; overflow-y: auto; }
+.msg-row { margin-bottom: 10px; }
+.msg-lbl { font-size: 11px; color: var(--sub); margin-bottom: 3px; }
+.msg-bubble {
+  font-size: 14px; line-height: 1.6;
+  padding: 8px 12px; border-radius: 10px;
+  display: inline-block; max-width: 88%;
+  white-space: pre-wrap; word-break: break-all;
+}
+.msg-row.mine { text-align: right; }
+.msg-row.mine .msg-lbl { text-align: right; }
+.msg-row.mine .msg-bubble { background: #dbeafe; }
+.msg-row.other .msg-bubble { background: #f0f0eb; }
+.history-empty { font-size: 13px; color: var(--sub); text-align: center; padding: 16px 0; }
+.msg-actions { display: flex; gap: 6px; margin-top: 4px; }
+.msg-row.mine .msg-actions { justify-content: flex-end; }
+.msg-act-btn {
+  background: none; border: none; cursor: pointer;
+  font-size: 11px; color: var(--sub); padding: 2px 4px;
+  border-radius: 4px; font-family: inherit;
+}
+.msg-act-btn:hover { background: #e8e8e2; color: var(--text); }
+.msg-act-btn.del:hover { color: var(--danger); background: var(--danger-bg); }
+.msg-edit-wrap { margin-top: 4px; }
+.msg-edit-wrap textarea {
+  width: 100%; font-size: 14px; padding: 7px 10px;
+  border: 1px solid #aaa; border-radius: 8px;
+  background: #fff; color: var(--text);
+  resize: none; min-height: 48px;
+}
+.msg-edit-actions { display: flex; gap: 6px; margin-top: 5px; }
+.msg-row.mine .msg-edit-actions { justify-content: flex-end; }
+.edit-save, .edit-cancel {
+  padding: 5px 12px; font-size: 12px; border-radius: 6px;
+  cursor: pointer; font-family: inherit;
+}
+.edit-save { background: var(--accent); color: #fff; border: none; }
+.edit-cancel { background: none; border: 1px solid var(--border); color: var(--sub); }
+
+/* ADD MESSAGE */
+.add-box { margin: 0 16px 16px; }
+.type-toggle { display: flex; margin-bottom: 8px; }
+.tbtn {
+  flex: 1; padding: 8px 4px; font-size: 13px; font-family: inherit;
+  border: 1px solid var(--border); cursor: pointer; background: var(--card); color: var(--sub);
+}
+.tbtn:first-child { border-radius: 8px 0 0 8px; }
+.tbtn:last-child { border-radius: 0 8px 8px 0; border-left: none; }
+.tbtn.active { background: var(--accent); color: #fff; border-color: var(--accent); }
+.add-row { display: flex; gap: 8px; align-items: flex-end; }
+.add-row textarea { flex: 1; min-height: 46px; max-height: 100px; resize: none; padding: 10px 12px; font-size: 14px; }
+.add-btn {
+  padding: 10px 14px; background: var(--card);
+  border: 1px solid var(--border); border-radius: 8px;
+  font-size: 13px; cursor: pointer; white-space: nowrap; font-family: inherit;
+}
+.add-btn:active { background: #f0f0eb; }
+
+/* GENERATE */
+.gen-wrap { padding: 0 16px; }
+.gen-btn {
+  width: 100%; padding: 14px;
+  background: var(--accent); color: #fff;
+  border: none; border-radius: var(--radius);
+  font-size: 15px; font-weight: 500; font-family: inherit;
+  cursor: pointer; transition: opacity 0.15s;
+}
+.gen-btn:hover { opacity: 0.85; }
+.gen-btn:disabled { opacity: 0.35; cursor: not-allowed; }
+
+/* OUTPUT */
+.output {
+  margin: 16px 16px 0;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 16px;
+  display: none;
+}
+.out-lbl { font-size: 11px; color: var(--sub); letter-spacing: 0.06em; margin-bottom: 10px; }
+.out-text { font-size: 15px; line-height: 1.8; white-space: pre-wrap; word-break: break-all; }
+.out-actions { display: flex; gap: 8px; margin-top: 14px; flex-wrap: wrap; }
+.copy-btn, .add-self-btn {
+  padding: 8px 14px;
+  border: 1px solid var(--border); border-radius: 8px;
+  font-size: 13px; cursor: pointer; font-family: inherit;
+}
+.copy-btn { background: #f5f5f0; color: #444; }
+.add-self-btn { background: #dbeafe; color: #1d4ed8; border-color: #bfdbfe; }
+
+/* ERR */
+.err {
+  margin: 12px 16px 0; padding: 10px 13px;
+  background: var(--danger-bg); border: 1px solid var(--danger-border);
+  border-radius: 8px; color: var(--danger); font-size: 13px; display: none;
+}
+
+/* MODAL */
+.modal-overlay {
+  display: none; position: fixed; inset: 0; z-index: 30;
+  background: rgba(0,0,0,0.4);
+  align-items: flex-end; justify-content: center;
+}
+.modal-overlay.open { display: flex; }
+.modal {
+  background: var(--card); width: 100%; max-width: 560px;
+  border-radius: 16px 16px 0 0;
+  padding: 20px 16px 40px;
+}
+.modal h2 { font-size: 15px; font-weight: 600; margin-bottom: 18px; }
+.mlbl { font-size: 12px; color: var(--sub); display: block; margin-bottom: 5px; }
+.modal input, .modal textarea {
+  width: 100%; padding: 10px 12px;
+  border: 1px solid var(--border); border-radius: 8px;
+  font-size: 14px; font-family: inherit; background: #f9f9f7; color: var(--text);
+  margin-bottom: 14px;
+}
+.modal input:focus, .modal textarea:focus { outline: none; border-color: #aaa; }
+.modal-actions { display: flex; gap: 8px; }
+.modal-cancel {
+  flex: 1; padding: 13px; background: none;
+  border: 1px solid var(--border); border-radius: 8px;
+  font-size: 14px; cursor: pointer; font-family: inherit;
+}
+.modal-save {
+  flex: 2; padding: 13px; background: var(--accent); color: #fff;
+  border: none; border-radius: 8px;
+  font-size: 14px; font-weight: 500; cursor: pointer; font-family: inherit;
+}
+
+/* SPINNER */
+.spinner {
+  display: inline-block; width: 14px; height: 14px;
+  border: 2px solid rgba(255,255,255,0.3);
+  border-top-color: #fff; border-radius: 50%;
+  animation: spin 0.7s linear infinite;
+  vertical-align: middle; margin-right: 7px;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+</style>
+</head>
+<body>
+
+<!-- LIST SCREEN -->
+<div class="screen active" id="screen-list">
+  <div class="header"><h1>返信文ジェネレーター</h1></div>
+  <div class="api-bar">
+    <span class="lbl">ANTHROPIC API KEY</span>
+    <input type="text" id="apikey" placeholder="sk-ant-..." autocomplete="off" spellcheck="false">
+  </div>
+  <div class="thread-list" id="thread-list"></div>
+  <button class="fab" onclick="openNewModal()">＋</button>
+</div>
+
+<!-- THREAD SCREEN -->
+<div class="screen" id="screen-thread">
+  <div class="header">
+    <button class="back-btn" onclick="goList()">‹</button>
+    <h1 id="thread-title"></h1>
+  </div>
+
+  <div class="fsec">
+    <label class="flbl" onclick="toggleProfile()">
+      <span>相手のプロフィール</span>
+      <span id="prof-icon">▼ 折りたたむ</span>
+    </label>
+    <div id="prof-wrap">
+      <textarea id="profile-text" rows="5" placeholder="プロフィールテキスト" oninput="saveProfile()"></textarea>
+    </div>
+  </div>
+
+  <div class="history-box">
+    <div class="history-header">
+      <span>会話履歴</span>
+      <button class="history-clear" onclick="clearHistory()">全削除</button>
+    </div>
+    <div class="history-messages" id="hist-msgs">
+      <div class="history-empty">まだメッセージがありません</div>
+    </div>
+  </div>
+
+  <div class="add-box">
+    <div class="type-toggle">
+      <button class="tbtn active" id="tbtn-other" onclick="setType('other')">相手の返信を追加</button>
+      <button class="tbtn" id="tbtn-mine" onclick="setType('mine')">自分の発言を追加</button>
+    </div>
+    <div class="add-row">
+      <textarea id="new-msg" rows="2" placeholder="メッセージを入力..."></textarea>
+      <button class="add-btn" onclick="addMsg()">追加</button>
+    </div>
+  </div>
+
+  <div class="gen-wrap">
+    <button class="gen-btn" id="gen-btn" onclick="generate()">返信文を生成する</button>
+  </div>
+  <div class="err" id="err"></div>
+  <div class="output" id="output">
+    <div class="out-lbl">返信文</div>
+    <div class="out-text" id="out-text"></div>
+    <div class="out-actions">
+      <button class="copy-btn" id="copy-btn" onclick="copyOut()">コピー</button>
+      <button class="add-self-btn" onclick="addOutAsmine()">自分の発言として履歴に追加</button>
+    </div>
+  </div>
+</div>
+
+<!-- NEW THREAD MODAL -->
+<div class="modal-overlay" id="modal" onclick="closeModalOutside(event)">
+  <div class="modal">
+    <h2>新しい相手を追加</h2>
+    <span class="mlbl">ニックネーム（識別用）</span>
+    <input type="text" id="new-name" placeholder="例：あかりさん" maxlength="30">
+    <span class="mlbl">プロフィールテキスト</span>
+    <textarea id="new-profile" rows="5" placeholder="マッチング相手のプロフィール文を貼り付け"></textarea>
+    <div class="modal-actions">
+      <button class="modal-cancel" onclick="closeModal()">キャンセル</button>
+      <button class="modal-save" onclick="saveNew()">追加する</button>
+    </div>
+  </div>
+</div>
+
+<script>
+/* ===== SYSTEM PROMPT ===== */
+const SYSTEM = `あなたは、マッチングアプリのメッセージ返信を最適化する専門アシスタントです。
+
+## ミッション
+ユーザーが提供する「相手女性のプロフィール」と「会話履歴」を分析し、現在のフェーズを内部的に判定した上で、最適な返信文を生成する。
+
+## 基本哲学
+- マッチングした時点で相手も会う意思がある。メッセージで点数を稼ごうとしない
+- 目標は5往復以内に会う約束を取ること
+- 女性にとって長いやり取りは大きな負担。余計な会話を引き延ばさない
+- 主導権は常に男性側が持つ
+- 基本の流れに従いつつ、会話の流れに応じて臨機応変に対応する
+- マッチングから実際に会えるのは20〜30%が合格ライン。どれだけ作り込んでもそれ以上は変わらない。会えない相手へのリソースを最小化し、実際に会えた相手を大切にすることが重要
+
+## フェーズ自動判定と返信戦略
+
+### フェーズ1：初回メッセージ（会話履歴がない、または男性がまだ送っていない）
+- 相手プロフィールの具体的な要素（趣味・写真の雰囲気・プロフ文の一節など）に言及する
+- 「かわいいですね」など安直な容姿の褒め言葉は禁止
+- 誰にでも当てはまるテンプレ感は禁止
+- 丁寧語を使う
+
+### フェーズ2：エリアヒアリング（男性の初回メッセージへの返信が来た後）
+以下の3要素を1〜2行にまとめて送る：
+1. 相手の返信への短い返し（話題を深追いせず簡潔に）
+2. プロフィールや会話から読み取れる共通点への言及で不安を解消する
+   例：「お酒好きなので合いそうだと思いました」「○○好きなの一緒ですね」
+3. 自分の活動エリアでの飲食自己開示＋相手のエリアのヒアリング
+   例：「最近、私は渋谷で焼肉してきました。○○さんは、飲み/カフェ/食事に行くのはどの辺が多いですか？」
+
+### フェーズ3：デートの仮誘い（相手の活動エリアが判明した後）
+会話履歴から相手のよく行くエリアと、ユーザーが誘いたいエリアを読み取り出し分ける：
+
+【相手のエリアが誘いたいエリアと一致する場合】
+「そうなんだ！オレもその辺よく行きます。[エリア]にめちゃうまい[飲食店の種類]があるので、一緒に行きましょう！」
+
+【相手のエリアが誘いたいエリアと異なる場合】
+「そうなんだ！[誘いたいエリア]にめちゃうまい[飲食店の種類]があるので、一緒に行きましょう！」
+
+誘うエリアや飲食店の種類が会話履歴に明記されていない場合は、渋谷・カフェをデフォルトとする。
+
+### フェーズ4：日程打診（「行きたい」「ぜひ」など肯定的な返信が来た後）
+- 「都合のいい日はいつですか？」と丸投げしない。男性側から3つの日程候補を提示する
+- 「○日と○日と○日、[エリア]あたりで空いてます！都合どうですか？」の形
+
+【「もっと仲良くなってから」「もう少しお話してから」と返ってきた場合】
+これは脈なしの場合と、アプリに慣れていない優良物件の可能性が半々です。
+アプリ慣れしていない場合は電話することでチャンスが生まれます。
+以下の2つの選択肢を提示します：
+
+▼ 電話に誘う場合（アプリ慣れしていない優良物件の可能性に賭ける）
+「メッセージじゃなかなか伝わらないから電話しよう」という意味合いで、会話の文脈に自然に合う文章を生成する。固定文ではなく、やり取りのトーンや相手のキャラクターに合わせて表現を変える。
+
+▼ 電話に誘わない場合（損切りする）
+「了解、またね」という意味合いで、会話の文脈に自然に合う文章を生成する。固定文ではなく、やり取りのトーンや相手のキャラクターに合わせて表現を変える。
+
+### フェーズ5：日程調整・確定・リマインド
+- 日程確定：「○日○時、○○でよろしくお願いします！」
+- 前日リマインド：「明日○時、○○でお待ちしています！」
+
+## 全フェーズ共通ルール
+
+### 文章の長さ
+- 長文にならなければよい。内容に応じて適切な長さにする
+
+### 絵文字
+- 1メッセージに1つまで
+- 相手が絵文字を使っていれば真似する。使っていなければ「！」で感情を補う
+
+### 禁止事項
+- 相手の全ての話題に応答しようとすること
+- 女性に決断を委ねること
+
+### 人気度の考慮
+- 美女・人気会員と思われる場合：褒めを抑え、対等〜やや余裕のある態度
+- 一般会員：標準的な接し方
+- 不人気会員と思われる場合：積極的に色々な面を褒める
+
+## 出力形式
+通常時：返信文のテキストのみ。説明・解説・フェーズ名・注釈・かぎかっこ一切不要。
+「もっと仲良くなってから」検知時のみ：状況説明＋2案のフォーマットで出力する。`;
+
+/* ===== STATE ===== */
+let currentId = null;
+let msgType = 'other';
+let profCollapsed = false;
+
+/* ===== STORAGE ===== */
+const LS = {
+  threads: () => JSON.parse(localStorage.getItem('mr_threads') || '[]'),
+  save: (t) => localStorage.setItem('mr_threads', JSON.stringify(t)),
+  get: (id) => LS.threads().find(t => t.id === id) || null,
+  update: (id, patch) => {
+    const ts = LS.threads();
+    const i = ts.findIndex(t => t.id === id);
+    if (i >= 0) { ts[i] = { ...ts[i], ...patch }; LS.save(ts); }
+  }
+};
+
+/* ===== LIST ===== */
+function renderList() {
+  const saved = localStorage.getItem('mr_apikey');
+  if (saved) document.getElementById('apikey').value = saved;
+
+  const threads = LS.threads();
+  const el = document.getElementById('thread-list');
+  if (!threads.length) {
+    el.innerHTML = '<div class="empty-state">＋ボタンで相手を追加してください</div>';
+    return;
+  }
+  el.innerHTML = threads.map(t => {
+    const cnt = t.messages ? t.messages.length : 0;
+    const meta = cnt ? `${cnt}件のメッセージ` : 'まだメッセージなし';
+    return `<div class="thread-item" onclick="openThread('${t.id}')">
+      <div>
+        <div class="thread-name">${esc(t.name)}</div>
+        <div class="thread-meta">${meta}</div>
+      </div>
+      <button class="thread-del" onclick="delThread(event,'${t.id}')">✕</button>
+    </div>`;
+  }).join('');
+}
+
+document.getElementById('apikey').addEventListener('input', function() {
+  localStorage.setItem('mr_apikey', this.value.trim());
+});
+
+function delThread(e, id) {
+  e.stopPropagation();
+  if (!confirm('このスレッドを削除しますか？')) return;
+  LS.save(LS.threads().filter(t => t.id !== id));
+  renderList();
+}
+
+/* ===== MODAL ===== */
+function openNewModal() {
+  document.getElementById('new-name').value = '';
+  document.getElementById('new-profile').value = '';
+  document.getElementById('modal').classList.add('open');
+  setTimeout(() => document.getElementById('new-name').focus(), 150);
+}
+function closeModal() { document.getElementById('modal').classList.remove('open'); }
+function closeModalOutside(e) { if (e.target.id === 'modal') closeModal(); }
+function saveNew() {
+  const name = document.getElementById('new-name').value.trim();
+  const profile = document.getElementById('new-profile').value.trim();
+  if (!name) { alert('ニックネームを入力してください'); return; }
+  const thread = { id: Date.now().toString(), name, profile, messages: [] };
+  const ts = LS.threads();
+  ts.unshift(thread);
+  LS.save(ts);
+  closeModal();
+  renderList();
+  openThread(thread.id);
+}
+
+/* ===== THREAD ===== */
+function openThread(id) {
+  currentId = id;
+  const t = LS.get(id);
+  if (!t) return;
+  document.getElementById('thread-title').textContent = t.name;
+  document.getElementById('profile-text').value = t.profile || '';
+  profCollapsed = false;
+  document.getElementById('prof-wrap').style.display = '';
+  document.getElementById('prof-icon').textContent = '▼ 折りたたむ';
+  document.getElementById('new-msg').value = '';
+  document.getElementById('output').style.display = 'none';
+  document.getElementById('err').style.display = 'none';
+  setType('other');
+  renderHist();
+  showScreen('screen-thread');
+  window.scrollTo(0, 0);
+}
+
+function goList() { showScreen('screen-list'); renderList(); }
+
+function showScreen(id) {
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+}
+
+function toggleProfile() {
+  profCollapsed = !profCollapsed;
+  document.getElementById('prof-wrap').style.display = profCollapsed ? 'none' : '';
+  document.getElementById('prof-icon').textContent = profCollapsed ? '▶ 展開する' : '▼ 折りたたむ';
+}
+
+function saveProfile() {
+  LS.update(currentId, { profile: document.getElementById('profile-text').value });
+}
+
+/* ===== HISTORY ===== */
+function renderHist() {
+  const t = LS.get(currentId);
+  if (!t) return;
+  const el = document.getElementById('hist-msgs');
+  if (!t.messages || !t.messages.length) {
+    el.innerHTML = '<div class="history-empty">まだメッセージがありません</div>';
+    return;
+  }
+  el.innerHTML = t.messages.map((m, i) => {
+    const cls = m.type === 'mine' ? 'mine' : 'other';
+    const lbl = m.type === 'mine' ? '自分' : '相手';
+    return `<div class="msg-row ${cls}" id="msg-${i}">
+      <div class="msg-lbl">${lbl}</div>
+      <div class="msg-bubble" id="bubble-${i}">${esc(m.text)}</div>
+      <div class="msg-actions">
+        <button class="msg-act-btn" onclick="startEdit(${i})">編集</button>
+        <button class="msg-act-btn del" onclick="delMsg(${i})">削除</button>
+      </div>
+    </div>`;
+  }).join('');
+  el.scrollTop = el.scrollHeight;
+}
+
+function delMsg(i) {
+  const t = LS.get(currentId);
+  if (!t) return;
+  t.messages.splice(i, 1);
+  LS.update(currentId, { messages: t.messages });
+  renderHist();
+}
+
+function startEdit(i) {
+  const t = LS.get(currentId);
+  if (!t) return;
+  const row = document.getElementById(`msg-${i}`);
+  const bubble = document.getElementById(`bubble-${i}`);
+  const origText = t.messages[i].text;
+  bubble.style.display = 'none';
+  const cls = t.messages[i].type === 'mine' ? 'mine' : '';
+  const editHtml = `<div class="msg-edit-wrap" id="edit-wrap-${i}">
+    <textarea id="edit-ta-${i}" rows="2">${esc(origText)}</textarea>
+    <div class="msg-edit-actions">
+      <button class="edit-cancel" onclick="cancelEdit(${i})">キャンセル</button>
+      <button class="edit-save" onclick="saveEdit(${i})">保存</button>
+    </div>
+  </div>`;
+  row.insertAdjacentHTML('beforeend', editHtml);
+  const ta = document.getElementById(`edit-ta-${i}`);
+  ta.focus();
+  ta.setSelectionRange(ta.value.length, ta.value.length);
+}
+
+function cancelEdit(i) {
+  document.getElementById(`bubble-${i}`).style.display = '';
+  const wrap = document.getElementById(`edit-wrap-${i}`);
+  if (wrap) wrap.remove();
+}
+
+function saveEdit(i) {
+  const ta = document.getElementById(`edit-ta-${i}`);
+  const newText = ta ? ta.value.trim() : '';
+  if (!newText) { delMsg(i); return; }
+  const t = LS.get(currentId);
+  if (!t) return;
+  t.messages[i].text = newText;
+  LS.update(currentId, { messages: t.messages });
+  renderHist();
+}
+
+function setType(type) {
+  msgType = type;
+  document.getElementById('tbtn-other').classList.toggle('active', type === 'other');
+  document.getElementById('tbtn-mine').classList.toggle('active', type === 'mine');
+  document.getElementById('new-msg').placeholder = type === 'other' ? '相手のメッセージを入力...' : '自分のメッセージを入力...';
+}
+
+function addMsg() {
+  const txt = document.getElementById('new-msg').value.trim();
+  if (!txt) return;
+  const t = LS.get(currentId);
+  if (!t) return;
+  const msgs = t.messages || [];
+  msgs.push({ type: msgType, text: txt });
+  LS.update(currentId, { messages: msgs });
+  document.getElementById('new-msg').value = '';
+  renderHist();
+}
+
+function clearHistory() {
+  if (!confirm('会話履歴を全て削除しますか？')) return;
+  LS.update(currentId, { messages: [] });
+  renderHist();
+  document.getElementById('output').style.display = 'none';
+}
+
+/* ===== GENERATE ===== */
+async function generate() {
+  const key = localStorage.getItem('mr_apikey') || '';
+  if (!key) { showErr('APIキーが未入力です。一覧画面で入力してください'); return; }
+  const t = LS.get(currentId);
+  if (!t) return;
+  if (!t.profile) { showErr('プロフィールを入力してください'); return; }
+
+  const histText = (t.messages && t.messages.length)
+    ? t.messages.map(m => `【${m.type === 'mine' ? '自分' : '相手'}】${m.text}`).join('\n')
+    : '（まだやり取りなし・初回メッセージ）';
+
+  const userMsg = `【相手のプロフィール】\n${t.profile}\n\n【会話履歴】\n${histText}`;
+
+  const btn = document.getElementById('gen-btn');
+  document.getElementById('err').style.display = 'none';
+  document.getElementById('output').style.display = 'none';
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner"></span>生成中...';
+
+  try {
+    const r = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': key,
+        'anthropic-version': '2023-06-01',
+        'anthropic-dangerous-direct-browser-access': 'true'
+      },
+      body: JSON.stringify({
+        model: 'claude-opus-4-5',
+        max_tokens: 400,
+        system: SYSTEM,
+        messages: [{ role: 'user', content: userMsg }]
+      })
+    });
+    if (!r.ok) {
+      const e = await r.json().catch(() => ({}));
+      throw new Error(e.error?.message || `HTTP ${r.status}`);
+    }
+    const d = await r.json();
+    const txt = d.content?.map(b => b.text || '').join('').trim();
+    if (!txt) throw new Error('生成に失敗しました');
+    document.getElementById('out-text').textContent = txt;
+    const outEl = document.getElementById('output');
+    outEl.style.display = 'block';
+    setTimeout(() => outEl.scrollIntoView({ behavior: 'smooth', block: 'nearest' }), 50);
+  } catch(e) {
+    showErr(e.message || 'エラーが発生しました');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '返信文を生成する';
+  }
+}
+
+/* ===== OUTPUT ACTIONS ===== */
+async function copyOut() {
+  const txt = document.getElementById('out-text').textContent;
+  try {
+    await navigator.clipboard.writeText(txt);
+  } catch {
+    // fallback
+    const ta = document.createElement('textarea');
+    ta.value = txt; document.body.appendChild(ta);
+    ta.select(); document.execCommand('copy');
+    document.body.removeChild(ta);
+  }
+  const b = document.getElementById('copy-btn');
+  b.textContent = 'コピーしました ✓';
+  setTimeout(() => b.textContent = 'コピー', 1600);
+}
+
+function addOutAsmine() {
+  const txt = document.getElementById('out-text').textContent.trim();
+  if (!txt) return;
+  const t = LS.get(currentId);
+  if (!t) return;
+  const msgs = t.messages || [];
+  msgs.push({ type: 'mine', text: txt });
+  LS.update(currentId, { messages: msgs });
+  renderHist();
+  document.getElementById('output').style.display = 'none';
+  setType('other');
+}
+
+/* ===== UTILS ===== */
+function showErr(m) {
+  const e = document.getElementById('err');
+  e.textContent = m; e.style.display = 'block';
+}
+function esc(s) {
+  return String(s)
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;')
+    .replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+/* ===== INIT ===== */
+renderList();
+</script>
+</body>
+</html>
